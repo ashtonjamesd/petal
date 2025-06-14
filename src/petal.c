@@ -317,20 +317,36 @@ static PetalToken parse_string(Petal *petal) {
 }
 
 static PetalToken parse_symbol(Petal *petal) {
-    int sz = 1;
-    char *lexeme = malloc(sz + 1);
-    lexeme[0] = current();
-    lexeme[1] = '\0';
+    int max_len = 0;
+    PetalTokenType best_type = PETAL_UNRECOGNIZED;
+    char *best_match = NULL;
 
-    PetalTokenType type = PETAL_UNRECOGNIZED;
-    if (is_recognized(petal, lexeme, PETAL_SYMBOL)) {
-        type = PETAL_SYMBOL;
+    for (int i = 0; i < petal->recognized_token_count; i++) {
+        PetalToken recognized = petal->recognized_tokens[i];
+
+        if (recognized.type != PETAL_SYMBOL) continue;
+
+        int len = strlen(recognized.lexeme);
+        if (strncmp(petal->source + petal->current, recognized.lexeme, len) == 0) {
+            if (len > max_len) {
+                max_len = len;
+                best_type = PETAL_SYMBOL;
+
+                free(best_match);
+                best_match = strdup(recognized.lexeme);
+            }
+        }
     }
 
-    PetalToken token = init_token(lexeme, type);
-    free(lexeme);
+    if (max_len > 0) {
+        petal->current += max_len - 1;
+        PetalToken token = init_token(best_match, best_type);
+        free(best_match);
+        return token;
+    }
 
-    return token;
+    char lexeme[2] = { current(), '\0' };
+    return init_token(lexeme, PETAL_UNRECOGNIZED);
 }
 
 static PetalToken parse_token(Petal *petal) {
