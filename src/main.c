@@ -52,8 +52,8 @@ void json_example() {
 }
 
 int main() {
-    // brainfuck_example();
-    math_example();
+    brainfuck_example();
+    // math_example();
     // c_like_example();
     // json_example();
 

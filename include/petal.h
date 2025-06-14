@@ -38,8 +38,11 @@ typedef struct {
     bool        has_floats;
     bool        has_integers;
     bool        has_whitespace;
-    bool        skip_whitespace;
     bool        has_strings;
+
+    bool        skip_whitespace;
+    bool        skip_unrecognized;
+    
     int         current;
 
     int         token_count;
@@ -65,6 +68,7 @@ void   with_floats(Petal *petal);
 void   with_strings(Petal *petal);
 
 void   skip_whitespace(Petal *petal);
+void   skip_unrecognized(Petal *petal);
 
 void   parse(Petal *parser);
 
