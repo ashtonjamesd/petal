@@ -12,8 +12,9 @@
 
 #define current() petal->source[petal->current]
 
-static PetalParser *petal_init(char *source) {
-    PetalParser *petal = malloc(sizeof(PetalParser));
+static Petal *petal_init(char *source) {
+    Petal *petal = malloc(sizeof(Petal));
+    petal->current = 0;
 
     petal->source = strdup(source);
 
@@ -21,6 +22,8 @@ static PetalParser *petal_init(char *source) {
     petal->has_whitespace = false;
     petal->has_integers = false;
     petal->has_floats = false;
+    petal->skip_whitespace = false;
+    petal->has_strings = false;
 
     petal->recognized_token_count = 0;
     petal->recognized_token_capacity = 1;
@@ -33,7 +36,7 @@ static PetalParser *petal_init(char *source) {
     return petal;
 }
 
-PetalParser *init_with_file(char *path) {
+Petal *init_with_file(char *path) {
     FILE *fptr = fopen(path, "r");
     if (!fptr) {
         printf("unable to find the file at '%s'", path);
@@ -50,16 +53,16 @@ PetalParser *init_with_file(char *path) {
 
     fclose(fptr);
 
-    PetalParser *petal = petal_init(buff);
+    Petal *petal = petal_init(buff);
     return petal;
 }
 
-PetalParser *init_with_string(char *source) {
-    PetalParser *petal = petal_init(source);
+Petal *init_with_string(char *source) {
+    Petal *petal = petal_init(source);
     return petal;
 }
 
-void petal_free(PetalParser *petal) {
+void petal_free(Petal *petal) {
     for (int i = 0; i < petal->recognized_token_count; i++) {
         free(petal->recognized_tokens[i].lexeme);
     }
@@ -81,28 +84,37 @@ static inline PetalToken init_token(char *lexeme, PetalTokenType type) {
     return token;
 }
 
-static inline bool is_end(PetalParser *petal) {
+static inline bool is_end(Petal *petal) {
     return petal->current >= (int)strlen(petal->source);
 }
 
-void with_whitespace(PetalParser *petal) {
+void with_whitespace(Petal *petal) {
     petal->has_whitespace = true;
 }
 
-void with_integers(PetalParser *petal) {
+void skip_whitespace(Petal *petal) {
+    with_whitespace(petal);
+    petal->skip_whitespace = true;
+}
+
+void with_integers(Petal *petal) {
     petal->has_integers = true;
 }
 
-void with_floats(PetalParser *petal) {
+void with_floats(Petal *petal) {
     with_integers(petal);
     petal->has_floats = true;
 }
 
-void with_identifiers(PetalParser *petal) {
+void with_identifiers(Petal *petal) {
     petal->has_identifiers = true;
 }
 
-void with_keywords(PetalParser *petal, int count, ...) {
+void with_strings(Petal *petal) {
+    petal->has_strings = true;
+}
+
+void with_petal_keywords(Petal *petal, int count, ...) {
     va_list args;
     va_start(args, count);
 
@@ -127,7 +139,7 @@ void with_keywords(PetalParser *petal, int count, ...) {
     va_end(args);
 }
 
-void with_symbols(PetalParser *petal, int count, ...) {
+void with_petal_symbols(Petal *petal, int count, ...) {
     va_list args;
     va_start(args, count);
 
@@ -150,7 +162,7 @@ void with_symbols(PetalParser *petal, int count, ...) {
     va_end(args);
 }
 
-static PetalToken parse_integer(PetalParser *petal) {
+static PetalToken parse_integer(Petal *petal) {
     int start = petal->current;
 
     PetalTokenType type = PETAL_INTEGER;
@@ -180,7 +192,7 @@ static PetalToken parse_integer(PetalParser *petal) {
     return token;
 }
 
-static bool is_recognized(PetalParser *petal, char *lexeme, PetalTokenType type) {
+static bool is_recognized(Petal *petal, char *lexeme, PetalTokenType type) {
     for (int i = 0; i < petal->recognized_token_count; i++) {
         PetalToken token = petal->recognized_tokens[i];
 
@@ -192,7 +204,7 @@ static bool is_recognized(PetalParser *petal, char *lexeme, PetalTokenType type)
     return false;
 }
 
-static PetalToken parse_identifier(PetalParser *petal) {
+static PetalToken parse_identifier(Petal *petal) {
     int start = petal->current;
 
     while (!is_end(petal) && isalnum(current())) { 
@@ -217,7 +229,7 @@ static PetalToken parse_identifier(PetalParser *petal) {
     return token;
 }
 
-static PetalToken parse_whitespace(PetalParser *petal) {
+static PetalToken parse_whitespace(Petal *petal) {
     int sz = 1;
     char *lexeme = malloc(sz + 1);
     lexeme[0] = current();
@@ -229,7 +241,34 @@ static PetalToken parse_whitespace(PetalParser *petal) {
     return token;
 }
 
-static PetalToken parse_symbol(PetalParser *petal) {
+static PetalToken parse_string(Petal *petal) {
+    char quote = current();
+    advance();
+
+    int start = petal->current;
+    while (!is_end(petal) && current() != quote) {
+        if (current() == '\\' && !is_end(petal)) {
+            advance();
+        }
+        advance();
+    }
+
+    int end = petal->current;
+    int length = end - start;
+    char *lexeme = malloc(length + 3);
+
+    lexeme[0] = quote;
+    strncpy(lexeme + 1, petal->source + start, length);
+    lexeme[length + 1] = quote;
+    lexeme[length + 2] = '\0';
+
+    PetalToken token = init_token(lexeme, PETAL_STRING);
+    free(lexeme);
+
+    return token;
+}
+
+static PetalToken parse_symbol(Petal *petal) {
     int sz = 1;
     char *lexeme = malloc(sz + 1);
     lexeme[0] = current();
@@ -246,7 +285,7 @@ static PetalToken parse_symbol(PetalParser *petal) {
     return token;
 }
 
-static PetalToken parse_token(PetalParser *petal) {
+static PetalToken parse_token(Petal *petal) {
     if (isalpha(current()) && petal->has_identifiers) {
         return parse_identifier(petal);
     }
@@ -256,12 +295,15 @@ static PetalToken parse_token(PetalParser *petal) {
     else if (isspace(current()) && petal->has_whitespace) {
         return parse_whitespace(petal);
     }
+    else if (current() == '\"' && petal->has_strings) {
+        return parse_string(petal);
+    }
     else {
         return parse_symbol(petal);
     }
 }
 
-static inline void add_token(PetalParser *petal, PetalToken token) {
+static inline void add_token(Petal *petal, PetalToken token) {
     if (petal->token_count >= petal->token_capacity) {
         petal->token_capacity *= 2;
         petal->tokens = realloc(petal->tokens, sizeof(PetalToken) * petal->token_capacity);
@@ -270,9 +312,16 @@ static inline void add_token(PetalParser *petal, PetalToken token) {
     petal->tokens[petal->token_count++] = token;
 }
 
-void parse(PetalParser *petal) {
+void parse(Petal *petal) {
     while (!is_end(petal)) {
         PetalToken token = parse_token(petal);
+        if (token.type == PETAL_WHITESPACE && petal->skip_whitespace) {
+            free(token.lexeme);
+            advance();
+
+            continue;
+        }
+
         add_token(petal, token);
     
         advance();
@@ -288,6 +337,7 @@ char *petal_token_type_to_str(PetalTokenType type) {
         case PETAL_FLOAT: return "float";
         case PETAL_INTEGER: return "integer";
         case PETAL_SYMBOL: return "symbol";
+        case PETAL_STRING: return "string";
         default: return "unknown character type";
     }
 }
@@ -305,7 +355,7 @@ int len_of_num(unsigned int x) {
     return 1;
 }
 
-void petal_inspect(PetalParser *petal) {
+void petal_inspect(Petal *petal) {
     printf("\n  petal inspect results:\n");
     for (int i = 0; i < 40; i++) putchar('-');
     printf("\n");

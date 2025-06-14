@@ -3,11 +3,11 @@
 
 #include <stdbool.h>
 
-#define WITH_KEYWORDS(petal, ...) \
-    with_keywords(petal, sizeof((char*[]){__VA_ARGS__}) / sizeof(char*), __VA_ARGS__)
+#define with_keywords(petal, ...) \
+    with_petal_keywords(petal, sizeof((char*[]){__VA_ARGS__}) / sizeof(char*), __VA_ARGS__)
 
-#define WITH_OPERATORS(petal, ...) \
-    with_symbols(petal, sizeof((char*[]){__VA_ARGS__}) / sizeof(char*), __VA_ARGS__)
+#define with_symbols(petal, ...) \
+    with_petal_symbols(petal, sizeof((char*[]){__VA_ARGS__}) / sizeof(char*), __VA_ARGS__)
 
 typedef enum {
     PETAL_KEYWORD,
@@ -16,6 +16,7 @@ typedef enum {
     PETAL_INTEGER,
     PETAL_FLOAT,
     PETAL_SYMBOL,
+    PETAL_STRING,
     PETAL_UNRECOGNIZED,
 } PetalTokenType;
 
@@ -37,6 +38,8 @@ typedef struct {
     bool        has_floats;
     bool        has_integers;
     bool        has_whitespace;
+    bool        skip_whitespace;
+    bool        has_strings;
     int         current;
 
     int         token_count;
@@ -46,22 +49,25 @@ typedef struct {
     int         recognized_token_count;
     int         recognized_token_capacity;
     PetalToken *recognized_tokens;
-} PetalParser;
+} Petal;
 
-PetalParser *init_with_file(char *path);
-PetalParser *init_with_string(char *source);
+Petal *init_with_file(char *path);
+Petal *init_with_string(char *source);
 
-void         petal_free(PetalParser *parser);
+void   petal_free(Petal *parser);
 
-void         with_keywords(PetalParser *petal, int count, ...);
-void         with_symbols(PetalParser *petal, int count, ...);
-void         with_identifiers(PetalParser *petal);
-void         with_whitespace(PetalParser *petal);
-void         with_integers(PetalParser *petal);
-void         with_floats(PetalParser *petal);
+void   with_petal_keywords(Petal *petal, int count, ...);
+void   with_petal_symbols(Petal *petal, int count, ...);
+void   with_identifiers(Petal *petal);
+void   with_whitespace(Petal *petal);
+void   with_integers(Petal *petal);
+void   with_floats(Petal *petal);
+void   with_strings(Petal *petal);
 
-void         parse(PetalParser *parser);
+void   skip_whitespace(Petal *petal);
 
-void         petal_inspect(PetalParser *parser);
+void   parse(Petal *parser);
+
+void   petal_inspect(Petal *parser);
 
 #endif
